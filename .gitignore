@@ -1,0 +1,21 @@
+.env
+.env.local
+.DS_Store
+.vscode/
+.idea/
+*.log
+Thumbs.db
+
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/*.egg-info/
+backend/service-account.json
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+SnapMend_Execution_PRD.pdf
+PRD_PART1_ARCHITECTURE.md
+PRD_PART2_BACKEND.md
+snapmend-ppt.pdf

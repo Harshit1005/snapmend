@@ -1,0 +1,1 @@
+"""SnapMend Backend Application."""
