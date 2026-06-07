@@ -1,420 +1,158 @@
 <template>
-  <div class="dashboard">
-    <div class="dashboard-header">
-      <h1>Dashboard</h1>
-      <p class="subtitle">Municipal Street Pavement Assessment System</p>
-    </div>
+  <div class="snap-screen">
 
-    <div v-if="systemStatus" class="status-cards">
-      <div class="status-card">
-        <div class="status-icon">⚙️</div>
-        <h3>Backend API</h3>
-        <p :class="`status ${systemStatus.assessment ? 'healthy' : 'error'}`">
-          {{ systemStatus.assessment ? '✅ Healthy' : '❌ Offline' }}
-        </p>
+    <!-- ── Top App Bar ── -->
+    <header class="snap-topbar">
+      <div class="snap-topbar-brand">
+        <span class="material-symbols-outlined ms-filled" style="color:#b02a26;font-size:24px">construction</span>
+        <span class="brand-name">SnapMend</span>
       </div>
-
-      <div class="status-card">
-        <div class="status-icon">🤖</div>
-        <h3>Gemini API</h3>
-        <p class="status healthy">✅ Connected</p>
+      <div class="snap-topbar-avatar">
+        <span class="material-symbols-outlined" style="color:#59413e;font-size:20px">person</span>
       </div>
+    </header>
 
-      <div class="status-card">
-        <div class="status-icon">📊</div>
-        <h3>BigQuery</h3>
-        <p class="status healthy">✅ Free Tier</p>
-      </div>
+    <!-- ── Main Scroll Area ── -->
+    <main class="snap-main">
 
-      <div class="status-card">
-        <div class="status-icon">💰</div>
-        <h3>Monthly Cost</h3>
-        <p class="status healthy">$0.00</p>
-      </div>
-    </div>
+      <!-- ── Hero Greeting Card ── -->
+      <section style="background:linear-gradient(135deg,#fff0ee 0%,#fff8f7 100%);padding:24px 16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f0d8d4;">
+        <div>
+          <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#261817;line-height:1.2">Good {{ greeting }},<br>Inspector 👋</h1>
+          <p style="font-size:13px;color:#59413e;margin-top:6px;font-weight:500">Municipal Pavement Assessment</p>
+        </div>
+        <div style="width:60px;height:60px;border-radius:50%;background:#b02a26;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(176,42,38,0.3);flex-shrink:0;">
+          <span style="font-size:18px;font-weight:700;color:#fff;line-height:1">{{ today.day }}</span>
+          <span style="font-size:10px;font-weight:600;color:#ffcbc5;letter-spacing:0.05em">{{ today.month }}</span>
+        </div>
+      </section>
 
-    <div class="dashboard-grid">
-      <div class="card">
-        <h2>Quick Start</h2>
-        <ol class="quick-start-steps">
-          <li>
-            <strong>Get API Key</strong>
-            <p>Visit <a href="https://ai.google.dev" target="_blank">ai.google.dev</a> (5 min)</p>
-          </li>
-          <li>
-            <strong>Deploy Backend</strong>
-            <p>Push to GitHub and deploy on Render (10 min)</p>
-          </li>
-          <li>
-            <strong>Configure Frontend</strong>
-            <p>Update API endpoint in .env file</p>
-          </li>
-          <li>
-            <strong>Start Assessment</strong>
-            <p>Use the assessment form to analyze streets</p>
-          </li>
-        </ol>
-      </div>
-
-      <div class="card">
-        <h2>Assessment Process</h2>
-        <div class="process-steps">
-          <div class="step">
-            <div class="step-num">1</div>
-            <p>
-              <strong>Inspect Street</strong>
-              <br />Take pavement photos
-            </p>
-          </div>
-          <div class="step">
-            <div class="step-num">2</div>
-            <p>
-              <strong>Submit Images</strong>
-              <br />Upload and add notes
-            </p>
-          </div>
-          <div class="step">
-            <div class="step-num">3</div>
-            <p>
-              <strong>AI Analysis</strong>
-              <br />Gemini identifies issues
-            </p>
-          </div>
-          <div class="step">
-            <div class="step-num">4</div>
-            <p>
-              <strong>Get Results</strong>
-              <br />Priority & cost estimates
-            </p>
+      <!-- ── Quick Actions ── -->
+      <section style="padding:20px 16px 4px">
+        <h2 style="font-size:18px;font-weight:600;letter-spacing:-0.01em;color:#261817;margin-bottom:14px">Quick Actions</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <!-- New Assessment -->
+          <router-link to="/assessment" style="display:block">
+            <div class="snap-card" style="padding:16px;background:linear-gradient(145deg,#fff0ed,#ffe4e0);border-color:#f5c9c4;cursor:pointer">
+              <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,109,77,0.15);display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+                <span class="material-symbols-outlined ms-filled" style="color:#e65c00;font-size:22px">photo_camera</span>
+              </div>
+              <h3 style="font-size:15px;font-weight:700;color:#261817;margin-bottom:4px">New Assessment</h3>
+              <p style="font-size:12px;color:#59413e;margin-bottom:12px;line-height:1.4">Snap &amp; analyze pavement</p>
+              <div style="display:flex;justify-content:flex-end">
+                <span class="material-symbols-outlined" style="color:#b02a26;font-size:20px">arrow_forward</span>
+              </div>
+            </div>
+          </router-link>
+          <!-- View Reports -->
+          <div class="snap-card" style="padding:16px;background:linear-gradient(145deg,#f2dbf4,#ede0f0);border-color:#d6c0d7;cursor:pointer">
+            <div style="width:44px;height:44px;border-radius:50%;background:rgba(106,89,109,0.15);display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+              <span class="material-symbols-outlined ms-filled" style="color:#655468;font-size:22px">analytics</span>
+            </div>
+            <h3 style="font-size:15px;font-weight:700;color:#261817;margin-bottom:4px">View Reports</h3>
+            <p style="font-size:12px;color:#59413e;margin-bottom:12px;line-height:1.4">Repair history &amp; trends</p>
+            <div style="display:flex;justify-content:flex-end">
+              <span class="material-symbols-outlined" style="color:#b02a26;font-size:20px">arrow_forward</span>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="card tech-stack">
-        <h2>Tech Stack</h2>
-        <ul>
-          <li>
-            <strong>Backend:</strong> FastAPI on Render
-          </li>
-          <li>
-            <strong>AI:</strong> Gemini 2.0 Flash (free)
-          </li>
-          <li>
-            <strong>Database:</strong> BigQuery (free tier)
-          </li>
-          <li>
-            <strong>Storage:</strong> Cloud Storage (free tier)
-          </li>
-          <li>
-            <strong>Frontend:</strong> Vue 3 + Vite
-          </li>
-        </ul>
-      </div>
+      <!-- ── Recent Assessments ── -->
+      <section style="padding:20px 16px 8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <h2 style="font-size:18px;font-weight:600;letter-spacing:-0.01em;color:#261817">Recent Assessments</h2>
+          <span style="font-size:13px;font-weight:600;color:#b02a26;cursor:pointer">See all</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <!-- Item 1 -->
+          <router-link to="/assessment">
+            <div class="snap-card" style="padding:12px;display:flex;align-items:center;gap:12px;cursor:pointer">
+              <div style="width:60px;height:60px;border-radius:12px;overflow:hidden;flex-shrink:0;background:#fde2df">
+                <img src="@/assets/reference.png" alt="Pothole" style="width:100%;height:100%;object-fit:cover" />
+              </div>
+              <div style="flex:1;min-width:0">
+                <h4 style="font-size:15px;font-weight:700;color:#261817;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">MH-47-A Street</h4>
+                <div style="margin-top:4px"><span class="pill pill-red">Severity 4/5 · High</span></div>
+                <p style="font-size:12px;color:#59413e;margin-top:4px">2 hours ago</p>
+              </div>
+              <span class="material-symbols-outlined" style="color:#59413e;font-size:20px;flex-shrink:0">chevron_right</span>
+            </div>
+          </router-link>
+          <!-- Item 2 -->
+          <div class="snap-card" style="padding:12px;display:flex;align-items:center;gap:12px;cursor:pointer">
+            <div style="width:60px;height:60px;border-radius:12px;background:#e8f5e9;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <span class="material-symbols-outlined" style="color:#2e7d32;font-size:26px">add_road</span>
+            </div>
+            <div style="flex:1;min-width:0">
+              <h4 style="font-size:15px;font-weight:700;color:#261817;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">SH-21-B Avenue</h4>
+              <div style="margin-top:4px"><span class="pill pill-green">Severity 2/5 · Low</span></div>
+              <p style="font-size:12px;color:#59413e;margin-top:4px">1 day ago</p>
+            </div>
+            <span class="material-symbols-outlined" style="color:#59413e;font-size:20px;flex-shrink:0">chevron_right</span>
+          </div>
+          <!-- Item 3 -->
+          <div class="snap-card" style="padding:12px;display:flex;align-items:center;gap:12px;cursor:pointer">
+            <div style="width:60px;height:60px;border-radius:12px;background:#fff8e1;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <span class="material-symbols-outlined" style="color:#a67c00;font-size:26px">add_road</span>
+            </div>
+            <div style="flex:1;min-width:0">
+              <h4 style="font-size:15px;font-weight:700;color:#261817;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">NH-48 Main Road</h4>
+              <div style="margin-top:4px"><span class="pill pill-amber">Severity 3/5 · Medium</span></div>
+              <p style="font-size:12px;color:#59413e;margin-top:4px">3 days ago</p>
+            </div>
+            <span class="material-symbols-outlined" style="color:#59413e;font-size:20px;flex-shrink:0">chevron_right</span>
+          </div>
+        </div>
+      </section>
 
-      <div class="card features">
-        <h2>Features</h2>
-        <ul>
-          <li>🖼️ Multi-image pavement analysis</li>
-          <li>🤖 AI-powered damage detection</li>
-          <li>📍 GPS location tracking</li>
-          <li>💰 Cost estimates & priority</li>
-          <li>📊 Repair history integration</li>
-          <li>🌍 Geospatial nearby streets</li>
-          <li>📧 Email notifications</li>
-          <li>✅ Zero billing required</li>
-        </ul>
-      </div>
-    </div>
+    </main>
 
-    <div class="cta-section">
-      <router-link to="/assessment" class="btn btn-large">
-        Start New Assessment →
+    <!-- ── Bottom Nav ── -->
+    <nav class="snap-nav">
+      <div class="snap-nav-item active">
+        <span class="material-symbols-outlined ms-filled" style="font-size:22px">dashboard</span>
+        <span>Dashboard</span>
+      </div>
+      <router-link to="/assessment" class="snap-nav-item" style="color:#59413e;">
+        <span class="material-symbols-outlined" style="font-size:22px">assessment</span>
+        <span>Assessments</span>
       </router-link>
-    </div>
+      <div class="snap-nav-item">
+        <span class="material-symbols-outlined" style="font-size:22px">build</span>
+        <span>Repairs</span>
+      </div>
+      <div class="snap-nav-item">
+        <span class="material-symbols-outlined" style="font-size:22px">settings</span>
+        <span>Settings</span>
+      </div>
+    </nav>
+
   </div>
 </template>
 
 <script>
-import { systemAPI, assessmentAPI, repairAPI } from '@/services/api'
+import { assessmentAPI } from '@/services/api'
 
 export default {
   name: 'Dashboard',
   data() {
+    const now = new Date()
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    const hour = now.getHours()
     return {
-      systemStatus: null,
+      apiStatus: null,
+      today: { day: now.getDate(), month: months[now.getMonth()] },
+      greeting: hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening',
     }
   },
   async mounted() {
-    await this.checkSystemStatus()
-  },
-  methods: {
-    async checkSystemStatus() {
-      try {
-        const assessment = await assessmentAPI.getHealth()
-        const repair = await repairAPI.getHealth()
-
-        this.systemStatus = {
-          assessment: assessment.status === 'healthy',
-          repair: repair.status === 'healthy',
-        }
-      } catch (err) {
-        this.systemStatus = {
-          assessment: false,
-          repair: false,
-        }
-      }
-    },
+    try {
+      const res = await assessmentAPI.getHealth()
+      this.apiStatus = res.data.status === 'healthy'
+    } catch {
+      this.apiStatus = false
+    }
   },
 }
 </script>
-
-<style scoped>
-.dashboard {
-  width: 100%;
-}
-
-.dashboard-header {
-  text-align: center;
-  color: white;
-  margin-bottom: 3rem;
-  animation: fadeInDown 0.6s ease-out;
-}
-
-.dashboard-header h1 {
-  font-size: 3rem;
-  margin-bottom: 0.5rem;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.subtitle {
-  font-size: 1.2rem;
-  opacity: 0.9;
-}
-
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.status-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 3rem;
-}
-
-.status-card {
-  background: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  text-align: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.status-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-.status-icon {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.status-card h3 {
-  color: #333;
-  margin-bottom: 0.5rem;
-}
-
-.status {
-  font-weight: bold;
-  font-size: 1rem;
-}
-
-.status.healthy {
-  color: #4caf50;
-}
-
-.status.error {
-  color: #d32f2f;
-}
-
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 2rem;
-  margin-bottom: 3rem;
-}
-
-.card {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  animation: fadeInUp 0.6s ease-out;
-}
-
-.card h2 {
-  color: #667eea;
-  margin-bottom: 1.5rem;
-  font-size: 1.5rem;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.quick-start-steps {
-  list-style: decimal;
-  padding-left: 1.5rem;
-}
-
-.quick-start-steps li {
-  margin-bottom: 1.5rem;
-  line-height: 1.6;
-}
-
-.quick-start-steps strong {
-  color: #333;
-}
-
-.quick-start-steps p {
-  margin: 0.5rem 0 0 0;
-  color: #666;
-  font-size: 0.95rem;
-}
-
-.quick-start-steps a {
-  color: #667eea;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.quick-start-steps a:hover {
-  text-decoration: underline;
-}
-
-.process-steps {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
-}
-
-.step {
-  display: flex;
-  gap: 1rem;
-  padding: 1rem;
-  background: #f9f9f9;
-  border-radius: 4px;
-  border-left: 3px solid #667eea;
-}
-
-.step-num {
-  width: 2.5rem;
-  height: 2.5rem;
-  background: #667eea;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  flex-shrink: 0;
-}
-
-.step p {
-  margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.4;
-}
-
-.step strong {
-  color: #333;
-}
-
-.card ul {
-  list-style: none;
-  padding: 0;
-}
-
-.card li {
-  padding: 0.75rem 0;
-  color: #555;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.card li:last-child {
-  border-bottom: none;
-}
-
-.tech-stack li,
-.features li {
-  font-size: 0.95rem;
-}
-
-.features li {
-  padding-left: 0;
-}
-
-.features li::before {
-  content: '✓ ';
-  color: #4caf50;
-  font-weight: bold;
-  margin-right: 0.5rem;
-}
-
-.cta-section {
-  text-align: center;
-  margin-top: 2rem;
-}
-
-.btn-large {
-  display: inline-block;
-  padding: 1rem 2.5rem;
-  background: white;
-  color: #667eea;
-  text-decoration: none;
-  border-radius: 8px;
-  font-size: 1.1rem;
-  font-weight: bold;
-  transition: all 0.3s;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.btn-large:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-}
-
-@media (max-width: 768px) {
-  .dashboard-header h1 {
-    font-size: 2rem;
-  }
-
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .process-steps {
-    grid-template-columns: 1fr;
-  }
-
-  .status-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-</style>

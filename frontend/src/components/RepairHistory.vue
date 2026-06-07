@@ -100,13 +100,13 @@ export default {
 .repair-history {
   background: white;
   padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   margin-top: 2rem;
 }
 
 h2 {
-  color: #667eea;
+  color: #513e65;
   margin-bottom: 1.5rem;
 }
 
@@ -121,7 +121,7 @@ h2 {
   padding: 1rem;
   background: #ffe0e0;
   color: #d32f2f;
-  border-radius: 4px;
+  border-radius: 8px;
   border-left: 4px solid #d32f2f;
 }
 
@@ -131,16 +131,16 @@ h2 {
 }
 
 .repair-card {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
   padding: 1.5rem;
-  background: #fafafa;
+  background: #f8f9fa;
   transition: all 0.2s;
 }
 
 .repair-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: #667eea;
+  box-shadow: 0 4px 12px rgba(81, 62, 101, 0.1);
+  border-color: #513e65;
 }
 
 .repair-header {
@@ -148,18 +148,20 @@ h2 {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid #e9ecef;
   padding-bottom: 0.5rem;
 }
 
 .repair-header h3 {
-  color: #333;
+  color: #212529;
   font-size: 1.1rem;
   margin: 0;
+  font-weight: 700;
+  text-transform: capitalize;
 }
 
 .date {
-  color: #666;
+  color: #6c757d;
   font-size: 0.9rem;
 }
 
@@ -169,10 +171,10 @@ h2 {
 
 .repair-details p {
   margin: 0.5rem 0;
-  color: #555;
+  color: #495057;
 }
 
 strong {
-  color: #333;
+  color: #212529;
 }
 </style>
