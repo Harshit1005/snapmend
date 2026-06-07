@@ -1,14 +1,26 @@
 """SnapMend Backend API - Main application entry point."""
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
+from app.database import init_db
 from app.routes import assessment, repair
+import app.db_models  # noqa: F401 — register ORM models with SQLAlchemy metadata
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Create DB tables on startup."""
+    await init_db()
+    yield
+
 
 # Initialize FastAPI app
 app = FastAPI(
     title="SnapMend API",
     description="Municipal street pavement assessment and repair management system",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Configure CORS
@@ -19,6 +31,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+import os
+from fastapi.staticfiles import StaticFiles
+
+# Ensure uploads directory exists
+os.makedirs("uploads", exist_ok=True)
+
+# Mount static directory for uploaded images
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 
 # Include route modules
 app.include_router(assessment.router)
@@ -35,6 +57,8 @@ async def root():
         "docs": "/docs",
         "endpoints": {
             "assessment": "/api/assessment/evaluate",
+            "assessment_list": "/api/assessment/list",
+            "assessment_stats": "/api/assessment/stats",
             "repair_history": "/api/repair/history/{street_segment_id}",
             "nearby_streets": "/api/repair/nearby",
             "work_orders": "/api/repair/work-order",
@@ -49,7 +73,8 @@ async def health_check():
         "status": "healthy",
         "service": "snapmend-backend",
         "gemini_api_configured": bool(settings.gemini_api_key),
-        "gcp_project": settings.gcp_project_id,
+        "database": "sqlite",
+        "db_path": settings.sqlite_db_path,
     }
 
 
@@ -62,3 +87,4 @@ if __name__ == "__main__":
         port=8000,
         reload=True,
     )
+

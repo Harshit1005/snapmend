@@ -27,26 +27,38 @@
           />
         </div>
 
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+          <span style="font-size:0.9rem;font-weight:600;color:#495057">GPS Coordinates *</span>
+          <button
+            type="button"
+            class="btn-gps"
+            @click="fetchGPS"
+            :disabled="gpsLoading"
+          >
+            <span v-if="gpsLoading">📡 Locating...</span>
+            <span v-else>📍 Use My Location</span>
+          </button>
+        </div>
         <div class="form-row">
           <div class="form-group">
-            <label for="gps_latitude">GPS Latitude *</label>
+            <label for="gps_latitude">Latitude *</label>
             <input
               id="gps_latitude"
               v-model.number="form.gps_latitude"
               type="number"
               step="0.000001"
-              placeholder="40.7128"
+              placeholder="e.g. 18.5204"
               required
             />
           </div>
           <div class="form-group">
-            <label for="gps_longitude">GPS Longitude *</label>
+            <label for="gps_longitude">Longitude *</label>
             <input
               id="gps_longitude"
               v-model.number="form.gps_longitude"
               type="number"
               step="0.000001"
-              placeholder="-74.0060"
+              placeholder="e.g. 73.8567"
               required
             />
           </div>
@@ -67,23 +79,25 @@
         </div>
 
         <div class="form-group">
-          <label for="images" class="file-upload-label">
-            <span class="upload-icon">📷</span> Pavement Photos * (JPG, PNG)
-          </label>
-          <input
-            id="images"
-            type="file"
-            multiple
-            accept="image/*"
-            @change="handleImageSelect"
-            required
-            class="file-input"
+          <label style="margin-bottom:0.6rem;display:block">📷 Pavement Photo *</label>
+          <CameraCapture
+            @update:files="onCameraFiles"
+            @update:previews="onCameraPreviews"
           />
-          <div v-if="selectedImages.length > 0" class="image-previews">
-            <div v-for="(img, idx) in selectedImagePreviews" :key="idx" class="preview-thumbnail">
-              <img :src="img" />
+          <div style="margin-top: 1rem; text-align: center;">
+            <span style="font-size: 0.9rem; color: #6c757d; margin-bottom: 0.5rem; display: block;">OR</span>
+            <label class="file-upload-label" style="padding: 1rem; cursor: pointer;">
+              <span class="material-symbols-outlined upload-icon" style="font-size: 24px; margin-bottom: 4px;">upload_file</span>
+              <span style="font-size: 0.9rem;">Upload from device</span>
+              <input type="file" accept="image/*" class="file-input" @change="handleImageSelect" multiple />
+            </label>
+          </div>
+          <div v-if="selectedImagePreviews.length > 0" class="image-previews">
+            <div v-for="(preview, index) in selectedImagePreviews" :key="index" class="preview-thumbnail">
+              <img :src="preview" />
             </div>
           </div>
+          <p v-show="selectedImages.length === 0 && !!formSubmitAttempted" style="color:#c62828;font-size:12px;margin-top:6px">⚠ Please capture or upload at least one photo</p>
         </div>
       </fieldset>
 
@@ -223,9 +237,11 @@
 
 <script>
 import { assessmentAPI, repairAPI } from '@/services/api'
+import CameraCapture from '@/components/CameraCapture.vue'
 
 export default {
   name: 'AssessmentForm',
+  components: { CameraCapture },
   data() {
     return {
       form: {
@@ -243,9 +259,15 @@ export default {
       result: null,
       showDecision: true,
       isWorkOrderLoading: false,
+      formSubmitAttempted: false,
       workOrderResult: null,
       requestReviewMessage: null,
+      gpsLoading: false,
     }
+  },
+  mounted() {
+    // Auto-fetch GPS on load so inspectors don't have to type coordinates
+    this.fetchGPS()
   },
   computed: {
     severityText() {
@@ -290,6 +312,15 @@ export default {
     }
   },
   methods: {
+    onCameraFiles(files) {
+      this.selectedImages = files
+      this.error = null
+    },
+    onCameraPreviews(previews) {
+      this.selectedImagePreviews = previews
+      if (previews.length > 0) this.imagePreviewUrl = previews[0]
+    },
+
     handleImageSelect(event) {
       this.selectedImages = Array.from(event.target.files)
       this.selectedImagePreviews = []
@@ -308,8 +339,9 @@ export default {
     },
 
     async submitAssessment() {
+      this.formSubmitAttempted = true
       if (!this.selectedImages.length) {
-        this.error = 'Please select at least one image'
+        this.error = 'Please capture at least one photo first'
         return
       }
 
@@ -373,6 +405,24 @@ export default {
       this.error = null
       this.workOrderResult = null
       this.requestReviewMessage = null
+      this.fetchGPS()
+    },
+
+    fetchGPS() {
+      if (!navigator.geolocation) return
+      this.gpsLoading = true
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          this.form.gps_latitude = parseFloat(pos.coords.latitude.toFixed(6))
+          this.form.gps_longitude = parseFloat(pos.coords.longitude.toFixed(6))
+          this.gpsLoading = false
+        },
+        () => {
+          // User denied or unavailable — silently fail
+          this.gpsLoading = false
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      )
     },
   },
 }
@@ -382,6 +432,27 @@ export default {
 .assessment-container {
   width: 100%;
   max-width: 650px;
+
+.btn-gps {
+  background: #f1edf4;
+  border: 1.5px solid #d6c0d7;
+  color: #513e65;
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-gps:hover:not(:disabled) {
+  background: #e8dff0;
+  border-color: #513e65;
+}
+.btn-gps:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
   margin: 0 auto;
 }
 

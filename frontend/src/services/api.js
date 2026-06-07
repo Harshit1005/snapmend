@@ -29,6 +29,11 @@ export const assessmentAPI = {
     return api.get('/api/assessment/list', { params: { limit } })
   },
 
+  /** Get aggregate stats for Dashboard header */
+  async getStats() {
+    return api.get('/api/assessment/stats')
+  },
+
   /** Get a single assessment by ID */
   async getById(assessmentId) {
     return api.get(`/api/assessment/${assessmentId}`)
@@ -39,6 +44,7 @@ export const assessmentAPI = {
     return api.get('/api/assessment/health')
   },
 }
+
 
 export const repairAPI = {
   /** Get repair history for a street segment */
