@@ -46,7 +46,7 @@
               id="gps_latitude"
               v-model.number="form.gps_latitude"
               type="number"
-              step="0.000001"
+              step="any"
               placeholder="e.g. 18.5204"
               required
             />
@@ -57,7 +57,7 @@
               id="gps_longitude"
               v-model.number="form.gps_longitude"
               type="number"
-              step="0.000001"
+              step="any"
               placeholder="e.g. 73.8567"
               required
             />
@@ -132,13 +132,33 @@
 
       <div class="reference-card">
         <!-- Pavement image with absolute-positioned annotation tooltip -->
+        <!-- Pavement image with absolute-positioned dynamic bounding boxes -->
         <div class="pavement-image-container">
           <img v-if="imagePreviewUrl" :src="imagePreviewUrl" class="pavement-image" />
           <div v-else class="pavement-image-placeholder">
             <span>No Image Preview</span>
           </div>
-          <!-- Bounding box with tooltip overlay -->
-          <div class="bounding-box-overlay">
+          <!-- Dynamic Bounding boxes with tooltip overlays -->
+          <template v-if="result && result.pavement_condition.detected_distresses && result.pavement_condition.detected_distresses.length > 0">
+            <div 
+              v-for="(distress, dIndex) in result.pavement_condition.detected_distresses" 
+              :key="dIndex"
+              class="dynamic-bounding-box"
+              :style="{
+                top: distress.box_2d[0] + '%',
+                left: distress.box_2d[1] + '%',
+                width: (distress.box_2d[3] - distress.box_2d[1]) + '%',
+                height: (distress.box_2d[2] - distress.box_2d[0]) + '%'
+              }"
+            >
+              <div class="annotation-bubble">
+                {{ formatDistressType(distress.type) }} ({{ Math.round(distress.confidence * 100) }}%)
+                <div class="annotation-arrow"></div>
+              </div>
+            </div>
+          </template>
+          <!-- Fallback box if no detected distresses were returned -->
+          <div v-else class="bounding-box-overlay">
             <div class="annotation-bubble">
               {{ damageAnnotation }}
               <div class="annotation-arrow"></div>
@@ -146,7 +166,7 @@
           </div>
         </div>
 
-        <!-- Severity Level red banner -->
+        <!-- Severity Level banner -->
         <div class="severity-banner" :class="severityClass">
           {{ severityText }}
         </div>
@@ -157,37 +177,99 @@
           <p class="immediate-text">{{ result.pavement_condition.repair_method }}</p>
         </div>
 
-        <!-- Estimated Cost card -->
-        <div class="cost-card">
-          <div class="cost-icon-circle">
-            <span class="cost-icon">₹</span>
+        <!-- Estimated Cost card & Cost Breakdown -->
+        <div class="cost-card-container">
+          <div class="cost-card">
+            <div class="cost-icon-circle">
+              <span class="cost-icon">₹</span>
+            </div>
+            <div class="cost-info">
+              <span class="cost-label">Estimated Cost</span>
+              <span class="cost-value">₹{{ formattedCost }}</span>
+            </div>
           </div>
-          <div class="cost-info">
-            <span class="cost-label">Estimated Cost</span>
-            <span class="cost-value">₹{{ formattedCost }}</span>
+          <div v-if="result.pavement_condition.cost_breakdown" class="cost-breakdown-details">
+            <h5 class="section-subtitle">Cost Breakdown</h5>
+            <div class="breakdown-grid">
+              <div class="breakdown-item">
+                <span class="breakdown-label">Materials:</span>
+                <span class="breakdown-val">₹{{ formatINR(result.pavement_condition.cost_breakdown.materials_inr || result.pavement_condition.cost_breakdown.materials * 83.5) }}</span>
+              </div>
+              <div class="breakdown-item">
+                <span class="breakdown-label">Labor:</span>
+                <span class="breakdown-val">₹{{ formatINR(result.pavement_condition.cost_breakdown.labor_inr || result.pavement_condition.cost_breakdown.labor * 83.5) }}</span>
+              </div>
+              <div class="breakdown-item">
+                <span class="breakdown-label">Machinery:</span>
+                <span class="breakdown-val">₹{{ formatINR(result.pavement_condition.cost_breakdown.machinery_inr || result.pavement_condition.cost_breakdown.machinery * 83.5) }}</span>
+              </div>
+            </div>
           </div>
+        </div>
+
+        <!-- Detected distress dimensions -->
+        <div v-if="result.pavement_condition.detected_distresses && result.pavement_condition.detected_distresses.length > 0" class="distress-dimensions-card">
+          <h4 class="card-title">📐 Distress Dimensions <span class="estimate-disclaimer">(AI Visual Estimate - Approximate)</span></h4>
+          <div v-for="(distress, index) in result.pavement_condition.detected_distresses" :key="index" class="dimensions-item">
+            <div class="dimensions-header">
+              <span class="distress-type-tag">{{ formatDistressType(distress.type) }}</span>
+              <span class="distress-severity-tag" :class="distress.severity.toLowerCase()">{{ distress.severity }}</span>
+            </div>
+            <div v-if="distress.estimated_dimensions" class="dimensions-values">
+              <div class="dim-val"><span>Length:</span> <strong>{{ distress.estimated_dimensions.length_m || 'N/A' }} m</strong></div>
+              <div class="dim-val"><span>Width:</span> <strong>{{ distress.estimated_dimensions.width_m || 'N/A' }} m</strong></div>
+              <div class="dim-val"><span>Depth:</span> <strong>{{ distress.estimated_dimensions.depth_cm || 'N/A' }} cm</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step-by-Step Plan -->
+        <div v-if="result.pavement_condition.step_by_step_plan && result.pavement_condition.step_by_step_plan.length > 0" class="repair-plan-card">
+          <h4 class="card-title">📋 Step-by-Step Repair Plan <span class="estimate-disclaimer">(AI Generated - Contextual)</span></h4>
+          <ol class="plan-list">
+            <li v-for="(step, index) in result.pavement_condition.step_by_step_plan" :key="index" class="plan-step">
+              {{ step }}
+            </li>
+          </ol>
         </div>
 
         <!-- Why this decision? Expandable Accordion -->
         <div class="decision-accordion">
           <button type="button" class="accordion-trigger" @click="showDecision = !showDecision">
-            <span>Why this decision?</span>
+            <span>Engineering &amp; Context Justification</span>
             <span class="accordion-arrow" :class="{ open: showDecision }">▼</span>
           </button>
           
           <div v-show="showDecision" class="accordion-content">
-            <!-- Visual evidence -->
-            <div class="decision-item">
-              <div class="item-icon-circle visual">📷</div>
-              <div class="item-body">
-                <h5>Visual evidence</h5>
-                <p>Image analysis confirms {{ damageTypesText }}.</p>
+            <!-- New Rich Engineering Justification -->
+            <template v-if="result.pavement_condition.engineering_justification">
+              <div class="justification-block">
+                <h5>Visual Defects &amp; Observations</h5>
+                <p>{{ result.pavement_condition.engineering_justification.observed_defects }}</p>
               </div>
-              <span class="badge badge-critical">Critical</span>
-            </div>
+              <div class="justification-block">
+                <h5>Road Base Failure Risk</h5>
+                <p>{{ result.pavement_condition.engineering_justification.base_failure_risk }}</p>
+              </div>
+              <div class="justification-block">
+                <h5>Traffic &amp; Public Safety Impact</h5>
+                <p>{{ result.pavement_condition.engineering_justification.traffic_impact }}</p>
+              </div>
+            </template>
+            <!-- Fallback legacy justification -->
+            <template v-else>
+              <div class="decision-item">
+                <div class="item-icon-circle visual">📷</div>
+                <div class="item-body">
+                  <h5>Visual evidence</h5>
+                  <p>Image analysis confirms {{ damageTypesText }}.</p>
+                </div>
+                <span class="badge badge-critical">Critical</span>
+              </div>
+            </template>
 
             <!-- User notes -->
-            <div class="decision-item">
+            <div class="decision-item" style="margin-top: 1rem;">
               <div class="item-icon-circle notes">📝</div>
               <div class="item-body">
                 <h5>User notes</h5>
@@ -265,10 +347,6 @@ export default {
       gpsLoading: false,
     }
   },
-  mounted() {
-    // Auto-fetch GPS on load so inspectors don't have to type coordinates
-    this.fetchGPS()
-  },
   computed: {
     severityText() {
       if (!this.result) return ''
@@ -296,10 +374,8 @@ export default {
     },
     formattedCost() {
       if (!this.result) return '0'
-      const costUSD = this.result.pavement_condition.estimated_cost || 0
-      // Convert to INR to match reference layout
-      const costINR = Math.round(costUSD * 83)
-      return costINR.toLocaleString('en-IN')
+      const costINR = this.result.pavement_condition.estimated_cost_inr || Math.round((this.result.pavement_condition.estimated_cost || 0) * 83.5)
+      return Math.round(costINR).toLocaleString('en-IN')
     },
     damageTypesText() {
       if (!this.result) return ''
@@ -312,6 +388,15 @@ export default {
     }
   },
   methods: {
+    formatINR(val) {
+      if (val === undefined || val === null) return '0'
+      return Math.round(val).toLocaleString('en-IN')
+    },
+    formatDistressType(type) {
+      if (!type) return 'Distress'
+      let formatted = type.replace(/_/g, ' ')
+      return formatted.charAt(0).toUpperCase() + formatted.slice(1)
+    },
     onCameraFiles(files) {
       this.selectedImages = files
       this.error = null
@@ -405,23 +490,30 @@ export default {
       this.error = null
       this.workOrderResult = null
       this.requestReviewMessage = null
-      this.fetchGPS()
     },
 
     fetchGPS() {
-      if (!navigator.geolocation) return
+      if (!navigator.geolocation) {
+        this.error = "Geolocation is not supported by your browser or is blocked (requires HTTPS or localhost). Please enter coordinates manually."
+        return
+      }
       this.gpsLoading = true
+      this.error = null
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          this.form.gps_latitude = parseFloat(pos.coords.latitude.toFixed(6))
-          this.form.gps_longitude = parseFloat(pos.coords.longitude.toFixed(6))
+          this.form.gps_latitude = pos.coords.latitude
+          this.form.gps_longitude = pos.coords.longitude
           this.gpsLoading = false
         },
-        () => {
-          // User denied or unavailable — silently fail
+        (error) => {
           this.gpsLoading = false
+          let msg = "Failed to get location."
+          if (error.code === 1) msg = "Location permission denied."
+          else if (error.code === 2) msg = "Location unavailable."
+          else if (error.code === 3) msg = "Location request timed out."
+          this.error = msg + " Please enter GPS coordinates manually."
         },
-        { enableHighAccuracy: true, timeout: 8000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       )
     },
   },
@@ -1051,5 +1143,199 @@ textarea:focus {
     flex-direction: column;
     gap: 0.8rem;
   }
+}
+
+/* New detailed AI pipeline styles */
+.dynamic-bounding-box {
+  position: absolute;
+  border: 3px solid #ff9800;
+  border-radius: 8px;
+  box-sizing: border-box;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(255, 152, 0, 0.6);
+  z-index: 10;
+}
+
+.cost-card-container {
+  margin-top: 1.25rem;
+  background-color: #f8f9fa;
+  border-radius: 18px;
+  border: 1px solid #e9ecef;
+  padding: 1.2rem 1.5rem;
+}
+
+.cost-card-container .cost-card {
+  display: flex;
+  align-items: center;
+  border: none;
+  background-color: transparent;
+  padding: 0;
+  margin-top: 0;
+}
+
+.cost-breakdown-details {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #dee2e6;
+}
+
+.section-subtitle {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #495057;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.breakdown-item {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  padding: 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.breakdown-label {
+  font-size: 0.75rem;
+  color: #6c757d;
+  font-weight: 600;
+}
+
+.breakdown-val {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #513e65;
+  margin-top: 2px;
+}
+
+.distress-dimensions-card,
+.repair-plan-card {
+  margin-top: 1.25rem;
+  background: white;
+  border-radius: 18px;
+  border: 1px solid #e9ecef;
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+
+.card-title {
+  margin: 0 0 0.8rem 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #3f2f50;
+  display: flex;
+  align-items: center;
+}
+
+.dimensions-item {
+  background: #f8f9fa;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  border: 1px solid #f1f3f5;
+  margin-bottom: 0.8rem;
+}
+
+.dimensions-item:last-child {
+  margin-bottom: 0;
+}
+
+.dimensions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.distress-type-tag {
+  font-weight: 700;
+  color: #212529;
+  font-size: 0.9rem;
+}
+
+.distress-severity-tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+
+.distress-severity-tag.high { background: #ffebee; color: #c62828; }
+.distress-severity-tag.medium { background: #fff3e0; color: #e65100; }
+.distress-severity-tag.low { background: #e8f5e9; color: #1b5e20; }
+
+.dimensions-values {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.dim-val {
+  font-size: 0.85rem;
+  color: #495057;
+}
+
+.dim-val span {
+  color: #6c757d;
+  display: block;
+  font-size: 0.75rem;
+  margin-bottom: 2px;
+}
+
+.plan-list {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.plan-step {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #495057;
+  margin-bottom: 0.6rem;
+}
+
+.plan-step:last-child {
+  margin-bottom: 0;
+}
+
+.justification-block {
+  margin-bottom: 1.2rem;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.justification-block:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.justification-block h5 {
+  margin: 0 0 0.4rem 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #495057;
+}
+
+.justification-block p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #6c757d;
+}
+
+.estimate-disclaimer {
+  font-size: 0.75rem;
+  color: #868e96;
+  font-style: italic;
+  font-weight: normal;
 }
 </style>

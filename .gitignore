@@ -5,7 +5,7 @@
 .idea/
 *.log
 Thumbs.db
-
+.agents/
 # Backend
 backend/venv/
 backend/__pycache__/

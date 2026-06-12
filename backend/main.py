@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_db
 from app.routes import assessment, repair
-import app.db_models  # noqa: F401 — register ORM models with SQLAlchemy metadata
+
 
 
 @asynccontextmanager
@@ -27,6 +27,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex="https://.*\\.vercel\\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -73,8 +74,7 @@ async def health_check():
         "status": "healthy",
         "service": "snapmend-backend",
         "gemini_api_configured": bool(settings.gemini_api_key),
-        "database": "sqlite",
-        "db_path": settings.sqlite_db_path,
+        "database": "supabase",
     }
 
 

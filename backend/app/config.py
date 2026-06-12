@@ -1,6 +1,12 @@
 """Configuration management for SnapMend backend."""
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from typing import Optional, List
+
+# Resolve .env path relative to this file's location (backend/app/config.py)
+_backend_dir = Path(__file__).resolve().parent.parent
+_env_file_path = _backend_dir / ".env"
 
 
 class Settings(BaseSettings):
@@ -9,21 +15,10 @@ class Settings(BaseSettings):
     # Gemini API — required, get free key at https://ai.google.dev
     gemini_api_key: str
 
-    # GCP Configuration — optional for local SQLite-only dev
-    gcp_project_id: Optional[str] = None
-    gcs_bucket_name: Optional[str] = None
-    bq_dataset: Optional[str] = "mcd_dataset"
-    bq_repair_history_table: Optional[str] = "mcd_dataset.repair_history"
-    bq_streets_table: Optional[str] = "mcd_dataset.streets"
-    bq_work_orders_table: Optional[str] = "mcd_dataset.work_orders"
-
-    # Email Configuration — optional, skip if no Resend key
-    resend_api_key: Optional[str] = None
-    notification_from_email: Optional[str] = "noreply@snapmend.app"
-    notification_to_email: Optional[str] = None
-
-    # SQLite path (relative to backend root)
-    sqlite_db_path: str = "snapmend.db"
+    # Supabase Configuration
+    supabase_url: str = "https://your-supabase-url.supabase.co"
+    supabase_publishable_key: str = "your-publishable-key"
+    supabase_secret_key: str = "your-secret-key"
 
     # Frontend Configuration
     frontend_url: str = "http://localhost:5173"
@@ -34,8 +29,9 @@ class Settings(BaseSettings):
     ]
 
     class Config:
-        env_file = ".env"
+        env_file = str(_env_file_path)
         case_sensitive = False
 
 
 settings = Settings()
+

@@ -1,5 +1,4 @@
-"""Data models for SnapMend API."""
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -14,20 +13,105 @@ class AssessmentRequest(BaseModel):
     notes: Optional[str] = Field(None, description="Additional inspection notes")
 
 
+class DistressDimensions(BaseModel):
+    """Estimated dimensions of the distress."""
+    length_m: Optional[float] = Field(None, description="Length of damage in meters")
+    width_m: Optional[float] = Field(None, description="Width of damage in meters")
+    depth_cm: Optional[float] = Field(None, description="Depth of damage in centimeters")
+
+
+class DetectedDistress(BaseModel):
+    """Pavement distress object detected in the image."""
+    type: str = Field("pothole", description="pothole, cracking, rutting, raveling, etc.")
+    severity: str = Field("MEDIUM", description="LOW, MEDIUM, or HIGH")
+    box_2d: List[float] = Field(default_factory=list, description="Bounding box coordinates [ymin, xmin, ymax, xmax] normalized to [0, 1000]")
+    confidence: float = Field(0.0, description="Detection confidence score between 0 and 1")
+    estimated_dimensions: Optional[DistressDimensions] = None
+
+
+class CostBreakdown(BaseModel):
+    """Detailed repair cost breakdown in USD and INR."""
+    materials: float = Field(0.0, description="Materials cost in USD")
+    labor: float = Field(0.0, description="Labor cost in USD")
+    machinery: float = Field(0.0, description="Machinery cost in USD")
+    total: float = Field(0.0, description="Total cost in USD")
+    materials_inr: Optional[float] = None
+    labor_inr: Optional[float] = None
+    machinery_inr: Optional[float] = None
+    total_inr: Optional[float] = None
+
+
+class EngineeringJustification(BaseModel):
+    """Detailed engineering justification for the repair decision."""
+    observed_defects: str = Field("", description="Description of the defects observed in the image")
+    base_failure_risk: str = Field("", description="Assessment of risk to the road base structure")
+    traffic_impact: str = Field("", description="Potential impact on local traffic and safety hazard")
+
+
 class PavementCondition(BaseModel):
     """Pavement condition assessment result from Gemini."""
-    severity_level: str = Field(..., description="LOW, MEDIUM, or HIGH")
-    damage_types: List[str] = Field(..., description="List of damage types detected")
-    repair_priority: int = Field(..., description="Priority score 1-10")
+    severity_level: str = Field("MEDIUM", description="LOW, MEDIUM, or HIGH")
+    damage_types: List[str] = Field(default_factory=list, description="List of damage types detected")
+    repair_priority: int = Field(5, description="Priority score 1-10")
     estimated_cost: Optional[float] = Field(None, description="Estimated repair cost in USD")
     estimated_cost_inr: Optional[float] = Field(None, description="Estimated repair cost in INR")
     repair_method: Optional[str] = Field(None, description="Recommended repair method")
     detailed_assessment: Optional[str] = Field(None, description="Full Gemini assessment text")
+    
+    # New fields for advanced AI pipeline
+    detected_distresses: Optional[List[DetectedDistress]] = Field(default_factory=list)
+    cost_breakdown: Optional[CostBreakdown] = None
+    engineering_justification: Optional[EngineeringJustification] = None
+    step_by_step_plan: Optional[List[str]] = Field(default_factory=list)
 
-    def model_post_init(self, __context):
-        """Auto-calculate INR cost from USD if not provided."""
-        if self.estimated_cost is not None and self.estimated_cost_inr is None:
-            object.__setattr__(self, 'estimated_cost_inr', round(self.estimated_cost * 83.5, 2))
+    @model_validator(mode='after')
+    def reconcile_and_validate(self) -> 'PavementCondition':
+        # 1. Bounding box coordinates and confidence validation
+        valid_distresses = []
+        if self.detected_distresses:
+            for distress in self.detected_distresses:
+                # check box_2d has length 4
+                if not distress.box_2d or len(distress.box_2d) != 4:
+                    continue
+                ymin, xmin, ymax, xmax = distress.box_2d
+                # check bounds [0, 1000]
+                if not (0 <= ymin <= 1000 and 0 <= xmin <= 1000 and 0 <= ymax <= 1000 and 0 <= xmax <= 1000):
+                    continue
+                # check orientation
+                if ymin >= ymax or xmin >= xmax:
+                    continue
+                # check confidence
+                if not (0.0 <= distress.confidence <= 1.0):
+                    distress.confidence = max(0.0, min(1.0, distress.confidence))
+                valid_distresses.append(distress)
+            self.detected_distresses = valid_distresses
+
+        # 2. Cost breakdown validation and reconciliation
+        if self.cost_breakdown:
+            cb = self.cost_breakdown
+            # If total is not provided or 0, calculate it
+            if cb.total <= 0:
+                cb.total = cb.materials + cb.labor + cb.machinery
+            
+            # If materials + labor + machinery != total, adjust total to be the exact sum of parts
+            sum_parts = cb.materials + cb.labor + cb.machinery
+            if abs(sum_parts - cb.total) > 0.01:
+                cb.total = sum_parts
+
+            # Set self.estimated_cost to match the total in cost_breakdown
+            self.estimated_cost = cb.total
+
+        # 3. Ensure INR cost matching
+        if self.estimated_cost is not None:
+            self.estimated_cost_inr = round(self.estimated_cost * 83.5, 2)
+            if self.cost_breakdown:
+                cb = self.cost_breakdown
+                cb.materials_inr = round(cb.materials * 83.5, 2)
+                cb.labor_inr = round(cb.labor * 83.5, 2)
+                cb.machinery_inr = round(cb.machinery * 83.5, 2)
+                cb.total_inr = self.estimated_cost_inr
+
+        return self
 
 
 class AssessmentResponse(BaseModel):

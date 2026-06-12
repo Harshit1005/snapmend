@@ -1,11 +1,8 @@
 """Assessment endpoints for pavement condition evaluation."""
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
 from app.models import AssessmentResponse, AssessmentSummary, PavementCondition
 from app.gemini_service import GeminiAssessmentService
-from app.database import get_db
-from app.db_models import AssessmentRow
+from app.database import get_supabase
 from datetime import datetime, timezone
 from typing import List
 import base64
@@ -14,42 +11,94 @@ import uuid
 router = APIRouter(prefix="/api/assessment", tags=["assessment"])
 
 
-def _row_to_response(row: AssessmentRow) -> AssessmentResponse:
-    """Convert a DB row into the API response model."""
+def _dict_to_response(data: dict) -> AssessmentResponse:
+    """Convert a Supabase row dict into the API response model."""
+    import json
+    raw_str = data.get("raw_assessment", "")
+    new_fields = {}
+    if raw_str:
+        try:
+            raw_data = json.loads(raw_str)
+            
+            # Map box_2d coordinate from native [0, 1000] scale to percentage [0, 100] scale
+            distresses = raw_data.get("detected_distresses")
+            if distresses:
+                mapped_distresses = []
+                for distress in distresses:
+                    box = distress.get("box_2d")
+                    if box and len(box) == 4:
+                        # Convert coordinates from 0-1000 to 0-100 percent
+                        mapped_box = [round(coord / 10.0, 2) for coord in box]
+                        # Create a copy to avoid mutating cache/original object
+                        distress_copy = dict(distress)
+                        distress_copy["box_2d"] = mapped_box
+                        mapped_distresses.append(distress_copy)
+                    else:
+                        mapped_distresses.append(distress)
+                new_fields["detected_distresses"] = mapped_distresses
+            else:
+                new_fields["detected_distresses"] = []
+
+            new_fields["cost_breakdown"] = raw_data.get("cost_breakdown")
+            new_fields["engineering_justification"] = raw_data.get("engineering_justification")
+            new_fields["step_by_step_plan"] = raw_data.get("step_by_step_plan")
+        except Exception as e:
+            print("Warning: failed to parse raw_assessment fields:", e)
+
     condition = PavementCondition(
-        severity_level=row.severity_level,
-        damage_types=row.damage_types or [],
-        repair_priority=row.repair_priority,
-        estimated_cost=row.estimated_cost,
-        estimated_cost_inr=row.estimated_cost_inr,
-        repair_method=row.repair_method,
-        detailed_assessment=row.detailed_assessment,
+        severity_level=data.get("severity_level", "LOW"),
+        damage_types=data.get("damage_types", []),
+        repair_priority=data.get("repair_priority", 1),
+        estimated_cost=data.get("estimated_cost"),
+        estimated_cost_inr=data.get("estimated_cost_inr"),
+        repair_method=data.get("repair_method"),
+        detailed_assessment=data.get("detailed_assessment"),
+        **new_fields
     )
+    # Supabase timestamp format parsing can vary, safely pass it
+    timestamp = data.get("timestamp")
+    if isinstance(timestamp, str):
+        try:
+            timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            timestamp = datetime.now(timezone.utc)
+    else:
+        timestamp = datetime.now(timezone.utc)
+        
     return AssessmentResponse(
-        assessment_id=row.assessment_id,
-        street_segment_id=row.street_segment_id,
-        inspector_name=row.inspector_name,
-        timestamp=row.timestamp,
+        assessment_id=data.get("assessment_id"),
+        street_segment_id=data.get("street_segment_id"),
+        inspector_name=data.get("inspector_name"),
+        timestamp=timestamp,
         pavement_condition=condition,
-        raw_assessment=row.raw_assessment or "",
-        photo_urls=row.image_urls or [],
-        gps_latitude=row.gps_latitude,
-        gps_longitude=row.gps_longitude,
-        notes=row.notes,
+        raw_assessment=raw_str,
+        photo_urls=data.get("image_urls", []),
+        gps_latitude=data.get("gps_latitude"),
+        gps_longitude=data.get("gps_longitude"),
+        notes=data.get("notes"),
     )
 
 
-def _row_to_summary(row: AssessmentRow) -> AssessmentSummary:
-    """Convert a DB row into a lightweight summary."""
+def _dict_to_summary(data: dict) -> AssessmentSummary:
+    """Convert a Supabase row dict into a lightweight summary."""
+    timestamp = data.get("timestamp")
+    if isinstance(timestamp, str):
+        try:
+            timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            timestamp = datetime.now(timezone.utc)
+    else:
+        timestamp = datetime.now(timezone.utc)
+        
     return AssessmentSummary(
-        assessment_id=row.assessment_id,
-        street_segment_id=row.street_segment_id,
-        inspector_name=row.inspector_name,
-        timestamp=row.timestamp,
-        severity_level=row.severity_level,
-        repair_priority=row.repair_priority,
-        estimated_cost_inr=row.estimated_cost_inr,
-        damage_types=row.damage_types or [],
+        assessment_id=data.get("assessment_id"),
+        street_segment_id=data.get("street_segment_id"),
+        inspector_name=data.get("inspector_name"),
+        timestamp=timestamp,
+        severity_level=data.get("severity_level", "LOW"),
+        repair_priority=data.get("repair_priority", 1),
+        estimated_cost_inr=data.get("estimated_cost_inr"),
+        damage_types=data.get("damage_types", []),
     )
 
 
@@ -61,19 +110,17 @@ async def evaluate_pavement(
     gps_longitude: float = Form(...),
     notes: str = Form(default=""),
     images: List[UploadFile] = File(...),
-    db: AsyncSession = Depends(get_db),
+    supabase = Depends(get_supabase),
 ):
     """
     Evaluate street pavement condition using Gemini Vision API.
-    Accepts multipart form data with street info + image file(s).
-    Results are saved to SQLite for persistence across restarts.
+    Results are saved to Supabase for persistence.
     """
     try:
         if not images or len(images) == 0:
             raise HTTPException(status_code=400, detail="At least one image is required")
 
         import os
-        import uuid
 
         assessment_id = str(uuid.uuid4())
 
@@ -87,7 +134,7 @@ async def evaluate_pavement(
             encoded = base64.b64encode(content).decode("utf-8")
             encoded_images.append(encoded)
 
-            # Save to disk
+            # Save to local disk for now (could be moved to Supabase Storage)
             ext = os.path.splitext(img.filename)[1] if img.filename else ".jpg"
             if not ext: ext = ".jpg"
             filename = f"{assessment_id}_{i}{ext}"
@@ -96,12 +143,14 @@ async def evaluate_pavement(
                 out_file.write(content)
             image_urls.append(f"/uploads/{filename}")
 
-        # Run Gemini assessment with real image data
+        # Run grounding research step exactly once per request
+        research_report = await GeminiAssessmentService._run_research_step(gps_latitude, gps_longitude)
+
+        # Run Gemini assessment using the pre-computed research report context
         condition = await GeminiAssessmentService.assess_pavement(
             images=encoded_images,
             notes=notes,
-            lat=gps_latitude,
-            lon=gps_longitude,
+            research_report=research_report,
         )
 
         if not any("pothole" in d.lower() for d in condition.damage_types):
@@ -110,50 +159,39 @@ async def evaluate_pavement(
                 detail="This is not a pothole. Please try again after finding a pothole."
             )
 
-        # Get raw assessment text for audit log
+        # Retrieve raw assessment text reusing the research report context
         raw_assessment = await GeminiAssessmentService.get_raw_assessment(
             images=encoded_images,
             notes=notes,
-            lat=gps_latitude,
-            lon=gps_longitude,
+            research_report=research_report,
         )
 
-        # Build and persist to SQLite
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).isoformat()
 
-        row = AssessmentRow(
-            assessment_id=assessment_id,
-            street_segment_id=street_segment_id,
-            inspector_name=inspector_name,
-            timestamp=now,
-            severity_level=condition.severity_level,
-            damage_types=condition.damage_types,
-            image_urls=image_urls,
-            repair_priority=condition.repair_priority,
-            estimated_cost=condition.estimated_cost,
-            estimated_cost_inr=condition.estimated_cost_inr,
-            repair_method=condition.repair_method,
-            detailed_assessment=condition.detailed_assessment,
-            gps_latitude=gps_latitude,
-            gps_longitude=gps_longitude,
-            notes=notes or None,
-            raw_assessment=raw_assessment,
-        )
-        db.add(row)
-        await db.flush()
+        row_data = {
+            "assessment_id": assessment_id,
+            "street_segment_id": street_segment_id,
+            "inspector_name": inspector_name,
+            "timestamp": now,
+            "severity_level": condition.severity_level,
+            "damage_types": condition.damage_types,
+            "image_urls": image_urls,
+            "repair_priority": condition.repair_priority,
+            "estimated_cost": condition.estimated_cost,
+            "estimated_cost_inr": condition.estimated_cost_inr,
+            "repair_method": condition.repair_method,
+            "detailed_assessment": condition.detailed_assessment,
+            "gps_latitude": gps_latitude,
+            "gps_longitude": gps_longitude,
+            "notes": notes or None,
+            "raw_assessment": raw_assessment,
+        }
+        
+        response = supabase.table("assessments").insert(row_data).execute()
+        if not response.data:
+            raise Exception("Failed to insert assessment to Supabase")
 
-        return AssessmentResponse(
-            assessment_id=assessment_id,
-            street_segment_id=street_segment_id,
-            inspector_name=inspector_name,
-            timestamp=now,
-            pavement_condition=condition,
-            raw_assessment=raw_assessment,
-            photo_urls=image_urls,
-            gps_latitude=gps_latitude,
-            gps_longitude=gps_longitude,
-            notes=notes or None,
-        )
+        return _dict_to_response(response.data[0])
 
     except HTTPException:
         raise
@@ -164,27 +202,18 @@ async def evaluate_pavement(
 @router.get("/list", response_model=List[AssessmentSummary])
 async def list_assessments(
     limit: int = 20,
-    db: AsyncSession = Depends(get_db),
+    supabase = Depends(get_supabase),
 ):
-    """
-    List all assessments (most recent first).
-    Used by Dashboard to populate the recent assessments feed.
-    """
-    result = await db.execute(
-        select(AssessmentRow).order_by(desc(AssessmentRow.timestamp)).limit(limit)
-    )
-    rows = result.scalars().all()
-    return [_row_to_summary(r) for r in rows]
+    """List all assessments (most recent first)."""
+    response = supabase.table("assessments").select("*").order("timestamp", desc=True).limit(limit).execute()
+    return [_dict_to_summary(r) for r in response.data]
 
 
 @router.get("/stats", response_model=dict)
-async def get_stats(db: AsyncSession = Depends(get_db)):
-    """
-    Aggregate stats for Dashboard header cards.
-    Returns total count, severity breakdown, average cost.
-    """
-    result = await db.execute(select(AssessmentRow))
-    rows = result.scalars().all()
+async def get_stats(supabase = Depends(get_supabase)):
+    """Aggregate stats for Dashboard header cards."""
+    response = supabase.table("assessments").select("*").execute()
+    rows = response.data
 
     if not rows:
         return {
@@ -195,10 +224,10 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
             "avg_cost_inr": 0,
         }
 
-    high = sum(1 for r in rows if r.severity_level == "HIGH")
-    medium = sum(1 for r in rows if r.severity_level == "MEDIUM")
-    low = sum(1 for r in rows if r.severity_level == "LOW")
-    costs = [r.estimated_cost_inr for r in rows if r.estimated_cost_inr]
+    high = sum(1 for r in rows if r.get("severity_level") == "HIGH")
+    medium = sum(1 for r in rows if r.get("severity_level") == "MEDIUM")
+    low = sum(1 for r in rows if r.get("severity_level") == "LOW")
+    costs = [r.get("estimated_cost_inr") for r in rows if r.get("estimated_cost_inr")]
     avg_cost = round(sum(costs) / len(costs)) if costs else 0
 
     return {
@@ -211,27 +240,23 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/health", response_model=dict)
-async def assessment_health(db: AsyncSession = Depends(get_db)):
+async def assessment_health(supabase = Depends(get_supabase)):
     """Health check endpoint."""
-    result = await db.execute(select(AssessmentRow))
-    count = len(result.scalars().all())
+    response = supabase.table("assessments").select("assessment_id", count="exact").limit(1).execute()
     return {
         "status": "healthy",
         "service": "assessment",
-        "assessments_in_db": count,
+        "assessments_in_db": response.count if hasattr(response, 'count') else 0,
     }
 
 
 @router.get("/{assessment_id}", response_model=AssessmentResponse)
 async def get_assessment(
     assessment_id: str,
-    db: AsyncSession = Depends(get_db),
+    supabase = Depends(get_supabase),
 ):
     """Get a single assessment by ID."""
-    result = await db.execute(
-        select(AssessmentRow).where(AssessmentRow.assessment_id == assessment_id)
-    )
-    row = result.scalar_one_or_none()
-    if row is None:
+    response = supabase.table("assessments").select("*").eq("assessment_id", assessment_id).execute()
+    if not response.data:
         raise HTTPException(status_code=404, detail=f"Assessment '{assessment_id}' not found")
-    return _row_to_response(row)
+    return _dict_to_response(response.data[0])
