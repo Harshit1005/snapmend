@@ -1,7 +1,8 @@
 """Repair history and work order endpoints."""
 from fastapi import APIRouter, HTTPException, Query, Depends
 from app.models import RepairHistoryEntry, NearbyStreets, WorkOrder, WorkOrderCreate
-from app.database import get_supabase
+from app.database import get_firestore
+from google.cloud import firestore
 from datetime import datetime, timezone
 from typing import List
 import uuid
@@ -37,15 +38,15 @@ def _dict_to_work_order(data: dict) -> WorkOrder:
 async def get_repair_history(
     street_segment_id: str,
     limit: int = Query(10, ge=1, le=100),
-    supabase = Depends(get_supabase),
+    db = Depends(get_firestore),
 ):
     """
     Get repair history for a street segment.
     Returns work orders that have been created for this segment.
     """
     try:
-        response = supabase.table("work_orders").select("*").eq("street_segment_id", street_segment_id).order("created_date", desc=True).limit(limit).execute()
-        rows = response.data
+        docs = db.collection("work_orders").where("street_segment_id", "==", street_segment_id).order_by("created_date", direction=firestore.Query.DESCENDING).limit(limit).stream()
+        rows = [doc.to_dict() for doc in docs]
 
         return [
             RepairHistoryEntry(
@@ -69,15 +70,15 @@ async def get_nearby_streets(
     longitude: float = Query(...),
     radius_meters: int = Query(500, ge=100, le=5000),
     limit: int = Query(10, ge=1, le=50),
-    supabase = Depends(get_supabase),
+    db = Depends(get_firestore),
 ):
     """
     Get nearby streets with work orders.
     Simplified — returns unique street segments from work orders.
     """
     try:
-        response = supabase.table("work_orders").select("*").order("created_date", desc=True).execute()
-        rows = response.data
+        docs = db.collection("work_orders").order_by("created_date", direction=firestore.Query.DESCENDING).stream()
+        rows = [doc.to_dict() for doc in docs]
 
         seen = set()
         results = []
@@ -103,11 +104,11 @@ async def get_nearby_streets(
 @router.post("/work-order", response_model=WorkOrder)
 async def create_work_order(
     payload: WorkOrderCreate,
-    supabase = Depends(get_supabase),
+    db = Depends(get_firestore),
 ):
     """
     Create a work order for street repair.
-    Saved to Supabase.
+    Saved to Firestore.
     """
     try:
         work_order_id = (
@@ -132,11 +133,9 @@ async def create_work_order(
             "assigned_crew": "Pending Assignment",
         }
         
-        response = supabase.table("work_orders").insert(row_data).execute()
-        if not response.data:
-            raise Exception("Failed to insert work order to Supabase")
+        db.collection("work_orders").document(work_order_id).set(row_data)
 
-        return _dict_to_work_order(response.data[0])
+        return _dict_to_work_order(row_data)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create work order: {str(e)}")
@@ -145,19 +144,18 @@ async def create_work_order(
 @router.get("/work-orders", response_model=List[WorkOrder])
 async def list_work_orders(
     limit: int = Query(50, ge=1, le=200),
-    supabase = Depends(get_supabase),
+    db = Depends(get_firestore),
 ):
     """List all work orders, most recent first."""
-    response = supabase.table("work_orders").select("*").order("created_date", desc=True).limit(limit).execute()
-    return [_dict_to_work_order(r) for r in response.data]
+    docs = db.collection("work_orders").order_by("created_date", direction=firestore.Query.DESCENDING).limit(limit).stream()
+    return [_dict_to_work_order(doc.to_dict()) for doc in docs]
 
 
 @router.get("/health", response_model=dict)
-async def repair_health(supabase = Depends(get_supabase)):
+async def repair_health(db = Depends(get_firestore)):
     """Health check endpoint."""
-    response = supabase.table("work_orders").select("work_order_id", count="exact").limit(1).execute()
     return {
         "status": "healthy",
         "service": "repair",
-        "work_orders_in_db": response.count if hasattr(response, 'count') else 0,
+        "database": "firestore connected",
     }

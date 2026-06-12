@@ -15,10 +15,8 @@ class Settings(BaseSettings):
     # Gemini API — required, get free key at https://ai.google.dev
     gemini_api_key: str
 
-    # Supabase Configuration
-    supabase_url: str = "https://your-supabase-url.supabase.co"
-    supabase_publishable_key: str = "your-publishable-key"
-    supabase_secret_key: str = "your-secret-key"
+    # Firebase Configuration
+    firebase_credentials_path: str = "firebase-key.json"
 
     # Frontend Configuration
     frontend_url: str = "http://localhost:5173"

@@ -72,7 +72,7 @@ Always base your assessment on what you actually see in the image combined with 
 
 # Initialize new google-genai client
 _client = genai.Client(api_key=settings.gemini_api_key)
-_MODEL = "gemini-3.1-flash-lite"
+_MODEL = "gemini-2.5-flash"
 
 
 class GeminiAssessmentService:

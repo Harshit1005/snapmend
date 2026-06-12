@@ -2,7 +2,8 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from app.models import AssessmentResponse, AssessmentSummary, PavementCondition
 from app.gemini_service import GeminiAssessmentService
-from app.database import get_supabase
+from app.database import get_firestore
+from google.cloud import firestore
 from datetime import datetime, timezone
 from typing import List
 import base64
@@ -110,11 +111,11 @@ async def evaluate_pavement(
     gps_longitude: float = Form(...),
     notes: str = Form(default=""),
     images: List[UploadFile] = File(...),
-    supabase = Depends(get_supabase),
+    db = Depends(get_firestore),
 ):
     """
     Evaluate street pavement condition using Gemini Vision API.
-    Results are saved to Supabase for persistence.
+    Results are saved to Firestore for persistence.
     """
     try:
         if not images or len(images) == 0:
@@ -187,11 +188,9 @@ async def evaluate_pavement(
             "raw_assessment": raw_assessment,
         }
         
-        response = supabase.table("assessments").insert(row_data).execute()
-        if not response.data:
-            raise Exception("Failed to insert assessment to Supabase")
+        db.collection("assessments").document(assessment_id).set(row_data)
 
-        return _dict_to_response(response.data[0])
+        return _dict_to_response(row_data)
 
     except HTTPException:
         raise
@@ -202,18 +201,18 @@ async def evaluate_pavement(
 @router.get("/list", response_model=List[AssessmentSummary])
 async def list_assessments(
     limit: int = 20,
-    supabase = Depends(get_supabase),
+    db = Depends(get_firestore),
 ):
     """List all assessments (most recent first)."""
-    response = supabase.table("assessments").select("*").order("timestamp", desc=True).limit(limit).execute()
-    return [_dict_to_summary(r) for r in response.data]
+    docs = db.collection("assessments").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit).stream()
+    return [_dict_to_summary(doc.to_dict()) for doc in docs]
 
 
 @router.get("/stats", response_model=dict)
-async def get_stats(supabase = Depends(get_supabase)):
+async def get_stats(db = Depends(get_firestore)):
     """Aggregate stats for Dashboard header cards."""
-    response = supabase.table("assessments").select("*").execute()
-    rows = response.data
+    docs = db.collection("assessments").stream()
+    rows = [doc.to_dict() for doc in docs]
 
     if not rows:
         return {
@@ -240,23 +239,22 @@ async def get_stats(supabase = Depends(get_supabase)):
 
 
 @router.get("/health", response_model=dict)
-async def assessment_health(supabase = Depends(get_supabase)):
+async def assessment_health(db = Depends(get_firestore)):
     """Health check endpoint."""
-    response = supabase.table("assessments").select("assessment_id", count="exact").limit(1).execute()
     return {
         "status": "healthy",
         "service": "assessment",
-        "assessments_in_db": response.count if hasattr(response, 'count') else 0,
+        "database": "firestore connected",
     }
 
 
 @router.get("/{assessment_id}", response_model=AssessmentResponse)
 async def get_assessment(
     assessment_id: str,
-    supabase = Depends(get_supabase),
+    db = Depends(get_firestore),
 ):
     """Get a single assessment by ID."""
-    response = supabase.table("assessments").select("*").eq("assessment_id", assessment_id).execute()
-    if not response.data:
+    doc = db.collection("assessments").document(assessment_id).get()
+    if not doc.exists:
         raise HTTPException(status_code=404, detail=f"Assessment '{assessment_id}' not found")
-    return _dict_to_response(response.data[0])
+    return _dict_to_response(doc.to_dict())

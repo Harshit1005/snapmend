@@ -74,7 +74,7 @@ async def health_check():
         "status": "healthy",
         "service": "snapmend-backend",
         "gemini_api_configured": bool(settings.gemini_api_key),
-        "database": "supabase",
+        "database": "firebase",
     }
 
 
