@@ -22,19 +22,19 @@ class DistressDimensions(BaseModel):
 
 class DetectedDistress(BaseModel):
     """Pavement distress object detected in the image."""
-    type: str = Field("pothole", description="pothole, cracking, rutting, raveling, etc.")
-    severity: str = Field("MEDIUM", description="LOW, MEDIUM, or HIGH")
-    box_2d: List[float] = Field(default_factory=list, description="Bounding box coordinates [ymin, xmin, ymax, xmax] normalized to [0, 1000]")
-    confidence: float = Field(0.0, description="Detection confidence score between 0 and 1")
+    type: str = Field(description="pothole, cracking, rutting, raveling, etc.")
+    severity: str = Field(description="LOW, MEDIUM, or HIGH")
+    box_2d: List[float] = Field(description="Bounding box coordinates [ymin, xmin, ymax, xmax] normalized to [0, 1000]")
+    confidence: float = Field(description="Detection confidence score between 0 and 1")
     estimated_dimensions: Optional[DistressDimensions] = None
 
 
 class CostBreakdown(BaseModel):
     """Detailed repair cost breakdown in USD and INR."""
-    materials: float = Field(0.0, description="Materials cost in USD")
-    labor: float = Field(0.0, description="Labor cost in USD")
-    machinery: float = Field(0.0, description="Machinery cost in USD")
-    total: float = Field(0.0, description="Total cost in USD")
+    materials: float = Field(description="Materials cost in USD")
+    labor: float = Field(description="Labor cost in USD")
+    machinery: float = Field(description="Machinery cost in USD")
+    total: float = Field(description="Total cost in USD")
     materials_inr: Optional[float] = None
     labor_inr: Optional[float] = None
     machinery_inr: Optional[float] = None
@@ -43,26 +43,26 @@ class CostBreakdown(BaseModel):
 
 class EngineeringJustification(BaseModel):
     """Detailed engineering justification for the repair decision."""
-    observed_defects: str = Field("", description="Description of the defects observed in the image")
-    base_failure_risk: str = Field("", description="Assessment of risk to the road base structure")
-    traffic_impact: str = Field("", description="Potential impact on local traffic and safety hazard")
+    observed_defects: str = Field(description="Description of the defects observed in the image")
+    base_failure_risk: str = Field(description="Assessment of risk to the road base structure")
+    traffic_impact: str = Field(description="Potential impact on local traffic and safety hazard")
 
 
 class PavementCondition(BaseModel):
     """Pavement condition assessment result from Gemini."""
-    severity_level: str = Field("MEDIUM", description="LOW, MEDIUM, or HIGH")
-    damage_types: List[str] = Field(default_factory=list, description="List of damage types detected")
-    repair_priority: int = Field(5, description="Priority score 1-10")
+    severity_level: str = Field(description="LOW, MEDIUM, or HIGH")
+    damage_types: List[str] = Field(description="List of damage types detected")
+    repair_priority: int = Field(description="Priority score 1-10")
     estimated_cost: Optional[float] = Field(None, description="Estimated repair cost in USD")
     estimated_cost_inr: Optional[float] = Field(None, description="Estimated repair cost in INR")
     repair_method: Optional[str] = Field(None, description="Recommended repair method")
     detailed_assessment: Optional[str] = Field(None, description="Full Gemini assessment text")
     
     # New fields for advanced AI pipeline
-    detected_distresses: Optional[List[DetectedDistress]] = Field(default_factory=list)
+    detected_distresses: Optional[List[DetectedDistress]] = None
     cost_breakdown: Optional[CostBreakdown] = None
     engineering_justification: Optional[EngineeringJustification] = None
-    step_by_step_plan: Optional[List[str]] = Field(default_factory=list)
+    step_by_step_plan: Optional[List[str]] = None
 
     @model_validator(mode='after')
     def reconcile_and_validate(self) -> 'PavementCondition':

@@ -32,7 +32,7 @@
           </div>
           
           <div style="display:flex; justify-content:space-between; align-items:center; border-top: 1px solid #e1bfba; padding-top: 12px;">
-            <div style="font-size: 13px; font-weight: 600;">Est. Cost: ₹{{ assessment.estimated_cost_inr }}</div>
+            <div style="font-size: 13px; font-weight: 600;">Est. Cost: ₹{{ formatCostRange(assessment.estimated_cost_inr) }}</div>
             <button @click="createWorkOrder(assessment)" style="background:#4a3fb6; color:white; border:none; border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 13px; cursor:pointer;">
               Assign Work
             </button>
@@ -62,6 +62,12 @@ export default {
       if (severity === 'HIGH') return 'pill-red';
       if (severity === 'MEDIUM') return 'pill-amber';
       return 'pill-green';
+    },
+    formatCostRange(cost) {
+      if (!cost) return '0'
+      const lower = Math.round((cost * 0.85) / 100) * 100
+      const upper = Math.round((cost * 1.15) / 100) * 100
+      return `${lower.toLocaleString('en-IN')} - ${upper.toLocaleString('en-IN')}`
     },
     async fetchAssessments() {
       this.loading = true;

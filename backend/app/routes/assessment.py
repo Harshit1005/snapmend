@@ -147,25 +147,15 @@ async def evaluate_pavement(
         # Run grounding research step exactly once per request
         research_report = await GeminiAssessmentService._run_research_step(gps_latitude, gps_longitude)
 
-        # Run Gemini assessment using the pre-computed research report context
-        condition = await GeminiAssessmentService.assess_pavement(
-            images=encoded_images,
-            notes=notes,
-            research_report=research_report,
-        )
-
-        if not any("pothole" in d.lower() for d in condition.damage_types):
-            raise HTTPException(
-                status_code=400,
-                detail="This is not a pothole. Please try again after finding a pothole."
-            )
-
-        # Retrieve raw assessment text reusing the research report context
+        # Run Gemini assessment exactly once to get the raw JSON
         raw_assessment = await GeminiAssessmentService.get_raw_assessment(
             images=encoded_images,
             notes=notes,
             research_report=research_report,
         )
+        
+        # Parse it locally into the Pydantic model
+        condition = GeminiAssessmentService.parse_response(raw_assessment)
 
         now = datetime.now(timezone.utc).isoformat()
 

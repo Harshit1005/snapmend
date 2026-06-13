@@ -58,7 +58,7 @@
           </div>
           <div class="stat-box">
             <span class="label">Estimated Cost</span>
-            <span class="value">₹{{ formatCost(assessment.pavement_condition.estimated_cost_inr) }}</span>
+            <span class="value">₹{{ formatCostRange(assessment.pavement_condition.estimated_cost_inr) }}</span>
           </div>
           <div class="stat-box">
             <span class="label">Location</span>
@@ -103,7 +103,7 @@
         <div style="margin-bottom:40px;">
           <h2 class="section-title">Assessment Images</h2>
           <div v-if="assessment.photo_urls && assessment.photo_urls.length > 0" class="image-gallery">
-            <img v-for="url in assessment.photo_urls" :key="url" :src="'http://localhost:8000' + url" class="gallery-image" />
+            <img v-for="url in assessment.photo_urls" :key="url" :src="getImageUrl(url)" class="gallery-image" />
           </div>
           <div v-else class="snap-card" style="padding:24px;text-align:center;background:#f5f5f5;border-style:dashed;">
             <span class="material-symbols-outlined" style="font-size:36px;color:#c0c0c0;margin-bottom:8px;">image</span>
@@ -144,6 +144,16 @@ export default {
       } finally {
         this.loading = false
       }
+    },
+    getImageUrl(url) {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      return baseUrl + url;
+    },
+    formatCostRange(cost) {
+      if (!cost) return '0'
+      const lower = Math.round((cost * 0.85) / 100) * 100
+      const upper = Math.round((cost * 1.15) / 100) * 100
+      return `${lower.toLocaleString('en-IN')} - ${upper.toLocaleString('en-IN')}`
     },
     formatCost(cost) {
       if (!cost) return '0'

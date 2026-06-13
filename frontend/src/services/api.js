@@ -4,7 +4,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // 60s — Gemini can be slow on free tier
+  timeout: 120000, // 120s — Gemini proxy can be slow
 })
 
 export const assessmentAPI = {

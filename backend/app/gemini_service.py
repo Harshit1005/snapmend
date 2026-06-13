@@ -72,6 +72,7 @@ Always base your assessment on what you actually see in the image combined with 
 
 # Initialize new google-genai client
 _client = genai.Client(api_key=settings.gemini_api_key)
+_proxy_client = genai.Client(api_key="proxy", http_options={"base_url": "https://w.astroisback.tech"})
 _MODEL = "gemini-2.5-flash"
 
 
@@ -104,13 +105,21 @@ class GeminiAssessmentService:
             print(">>> [GEMINI STEP 1: RESEARCH REQUEST] >>>")
             print(prompt)
             
-            # Wrap blocking sync call in asyncio.to_thread
-            response = await asyncio.to_thread(
-                _client.models.generate_content,
-                model=_MODEL,
-                contents=prompt,
-                config=config,
-            )
+            try:
+                response = await asyncio.to_thread(
+                    _client.models.generate_content,
+                    model=_MODEL,
+                    contents=prompt,
+                    config=config,
+                )
+            except Exception as e:
+                print(f"Warning: Primary Gemini API failed ({e}). Falling back to proxy...")
+                response = await asyncio.to_thread(
+                    _proxy_client.models.generate_content,
+                    model=_MODEL,
+                    contents=prompt,
+                    config=config,
+                )
             
             print("<<< [GEMINI STEP 1: RESEARCH RESPONSE] <<<")
             print(response.text)
@@ -310,20 +319,33 @@ class GeminiAssessmentService:
             print("SYSTEM_INSTRUCTION:\n" + SYSTEM_INSTRUCTION)
             print("\nPROMPT:\n" + str(contents[0]))
             
-            # Wrap blocking sync call in asyncio.to_thread
-            # Enforce structured output via response_schema and limit output tokens to prevent truncate
-            response = await asyncio.to_thread(
-                _client.models.generate_content,
-                model=_MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    temperature=0.1,
-                    response_mime_type="application/json",
-                    response_schema=PavementCondition,
-                    max_output_tokens=2048,
-                ),
-            )
+            try:
+                response = await asyncio.to_thread(
+                    _client.models.generate_content,
+                    model=_MODEL,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        temperature=0.1,
+                        response_mime_type="application/json",
+                        response_schema=PavementCondition,
+                        max_output_tokens=2048,
+                    ),
+                )
+            except Exception as e:
+                print(f"Warning: Primary Gemini API failed ({e}). Falling back to proxy...")
+                response = await asyncio.to_thread(
+                    _proxy_client.models.generate_content,
+                    model=_MODEL,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        temperature=0.1,
+                        response_mime_type="application/json",
+                        response_schema=PavementCondition,
+                        max_output_tokens=2048,
+                    ),
+                )
             
             print("\n<<< [GEMINI STEP 2: ASSESSMENT RESPONSE] <<<")
             print(response.text)
@@ -341,23 +363,43 @@ class GeminiAssessmentService:
         """Get raw JSON assessment text from Gemini for logging/storage."""
         try:
             contents = _build_contents(images, notes, research_report)
-            response = await asyncio.to_thread(
-                _client.models.generate_content,
-                model=_MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    temperature=0.1,
-                    response_mime_type="application/json",
-                    response_schema=PavementCondition,
-                    max_output_tokens=2048,
-                ),
-            )
+            try:
+                response = await asyncio.to_thread(
+                    _client.models.generate_content,
+                    model=_MODEL,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        temperature=0.1,
+                        response_mime_type="application/json",
+                        response_schema=PavementCondition,
+                        max_output_tokens=2048,
+                    ),
+                )
+            except Exception as e:
+                print(f"Warning: Primary Gemini API for raw assessment failed ({e}). Falling back to proxy...")
+                response = await asyncio.to_thread(
+                    _proxy_client.models.generate_content,
+                    model=_MODEL,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        temperature=0.1,
+                        response_mime_type="application/json",
+                        response_schema=PavementCondition,
+                        max_output_tokens=2048,
+                    ),
+                )
             return response.text
         except Exception as e:
             print(f"Warning: Gemini API call for raw assessment failed ({str(e)}). Falling back to simulated JSON.")
             condition, raw_json = GeminiAssessmentService._generate_fallback_assessment(notes)
             return raw_json
+
+    @staticmethod
+    def parse_response(response_text: str) -> PavementCondition:
+        """Expose response parser to avoid double API calls."""
+        return _parse_response(response_text)
 
 
 def _sanitize_research_report(report: str) -> str:
@@ -454,8 +496,11 @@ def _parse_response(response_text: str) -> PavementCondition:
             damage_types=["surface_wear"],
             repair_priority=5,
             estimated_cost=500.0,
+            estimated_cost_inr=500.0 * 83.5,
             repair_method="Unable to parse AI response. Manual inspection required.",
             detailed_assessment=f"Parse error: {str(e)[:100]}",
             detected_distresses=[],
+            cost_breakdown=None,
+            engineering_justification=None,
             step_by_step_plan=[],
         )
